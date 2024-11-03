@@ -19,6 +19,7 @@ public class FileEntity {
   private String sourceEnvironment;
   private String originalFilename;
   private String contentType;
+  private String md5Checksum;
   private long size;
   private LocalDateTime createdAt;
 }

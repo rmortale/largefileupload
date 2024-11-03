@@ -4,6 +4,7 @@ import ch.dulce.largefileupload.repository.FileEntity;
 import ch.dulce.largefileupload.repository.FileRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -15,6 +16,7 @@ import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -61,11 +63,11 @@ public class FileController {
             item -> {
               if (!item.isFormField()) {
                 UUID id = UUID.randomUUID();
+                Path filePath = Path.of(fileDir, id.toString());
                 long copied =
                     Files.copy(
-                        item.getInputStream(),
-                        Path.of(fileDir, id.toString()),
-                        StandardCopyOption.REPLACE_EXISTING);
+                        item.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+                String md5 = getMd5FromFile(filePath);
                 repository.save(
                     new FileEntity(
                         id,
@@ -73,12 +75,23 @@ public class FileController {
                         srcEnv,
                         item.getName(),
                         item.getContentType(),
+                        md5,
                         copied,
                         LocalDateTime.now()));
-                log.info("Saved file {} with size {} bytes", item.getName(), copied);
+                log.info(
+                    "Saved file {} with size {} bytes and checksum {}",
+                    item.getName(),
+                    copied,
+                    md5);
               }
             });
 
     return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+  }
+
+  private String getMd5FromFile(Path filePath) throws IOException {
+    try (InputStream inputStream = Files.newInputStream(filePath)) {
+      return DigestUtils.md5DigestAsHex(inputStream);
+    }
   }
 }
