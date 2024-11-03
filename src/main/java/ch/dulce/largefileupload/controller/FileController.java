@@ -1,57 +1,84 @@
 package ch.dulce.largefileupload.controller;
 
+import ch.dulce.largefileupload.repository.FileEntity;
+import ch.dulce.largefileupload.repository.FileRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.fileupload2.jakarta.JakartaServletFileUpload;
 import org.apache.coyote.BadRequestException;
-import org.apache.tomcat.util.http.fileupload.IOUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-
-@Controller
-@RequestMapping("/file")
+@RestController
+@RequestMapping("/")
+@Slf4j
 public class FileController {
 
-//    private final FileService fileService;
-//
-//    public FileController(FileService fileService) {
-//        this.fileService = fileService;
-//    }
+  private static final String SOURCE_SYSTEM = "sourceSystem";
+  private static final String SOURCE_ENVIRONMENT = "sourceEnvironment";
+  private final String fileDir;
+  private final FileRepository repository;
 
-    @PostMapping("/upload")
-    public ResponseEntity<Void> upload(HttpServletRequest request) throws IOException {
+  public FileController(@Value("${app.fileDir}") String fileDir, FileRepository repository) {
+    this.fileDir = fileDir;
+    this.repository = repository;
+  }
 
-        if (!JakartaServletFileUpload.isMultipartContent(request)) {
-            throw new BadRequestException("Multipart request expected");
-        }
-        JakartaServletFileUpload fileUpload = new JakartaServletFileUpload();
+  @PostMapping("upload")
+  public ResponseEntity<Void> upload(
+      @RequestHeader(value = SOURCE_SYSTEM, required = false) String srcSystem,
+      @RequestHeader(value = SOURCE_ENVIRONMENT, required = false) String srcEnv,
+      HttpServletRequest request)
+      throws IOException {
 
-        // Parse the request
-        fileUpload.getItemIterator(request).forEachRemaining(item -> {
-            String name = item.getFieldName();
-            InputStream stream = item.getInputStream();
-            if (item.isFormField()) {
-                System.out.println("Form field " + name + " with value "
-                        + new String(stream.readAllBytes()) + " detected.");
-            } else {
-                System.out.println("File field " + name + " with file name "
-                        + item.getName() + " detected.");
-                // Process the input stream
-                long start = System.currentTimeMillis();
-                IOUtils.copyLarge(stream, new FileOutputStream(item.getName()));
-                long end = System.currentTimeMillis();
-                System.out.println("File uploaded in " + (end - start) + " ms");
-            }
-        });
-
-
-        return ResponseEntity.status(HttpStatus.FOUND).build();
+    if (srcSystem == null) {
+      throw new BadRequestException("Http header sourceSystem is required!");
     }
-}
+    if (srcEnv == null) {
+      throw new BadRequestException("Http header sourceEnvironment is required!");
+    }
+    if (!JakartaServletFileUpload.isMultipartContent(request)) {
+      throw new BadRequestException("Multipart request expected");
+    }
+    log.info("Received request from system {}, environment {}", srcSystem, srcEnv);
 
+    JakartaServletFileUpload fileUpload = new JakartaServletFileUpload();
+
+    fileUpload
+        .getItemIterator(request)
+        .forEachRemaining(
+            item -> {
+              if (!item.isFormField()) {
+                UUID id = UUID.randomUUID();
+                long copied =
+                    Files.copy(
+                        item.getInputStream(),
+                        Path.of(fileDir, id.toString()),
+                        StandardCopyOption.REPLACE_EXISTING);
+                repository.save(
+                    new FileEntity(
+                        id,
+                        srcSystem,
+                        srcEnv,
+                        item.getName(),
+                        item.getContentType(),
+                        copied,
+                        LocalDateTime.now()));
+                log.info("Saved file {} with size {} bytes", item.getName(), copied);
+              }
+            });
+
+    return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+  }
+}
