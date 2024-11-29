@@ -21,5 +21,5 @@ public class FileEntity {
   private String contentType;
   private String md5Checksum;
   private long size;
-  private LocalDateTime createdAt;
+  private LocalDateTime uploadedAt;
 }
