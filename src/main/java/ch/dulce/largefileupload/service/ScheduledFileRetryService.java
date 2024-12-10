@@ -34,17 +34,20 @@ public class ScheduledFileRetryService {
     List<FileEntity> received =
         fileRepository.findByStatus(
             RETRYING, Sort.by(Sort.Direction.ASC, "nextRetryTime"), Limit.of(fileRetryBatchSize));
-    log.info("Retrying {} files.", received.size());
+    log.info("Retrying {} file(s).", received.size());
 
     for (FileEntity file : received) {
       try {
-        log.info("Retrying file: {}", file.getOriginalFilename());
-
         if (file.getNextRetryTime().isAfter(LocalDateTime.now())) {
-          log.info("Retrying file: {} at {}", file.getOriginalFilename(), file.getNextRetryTime());
+          log.info(
+              "Retrying file: {} later at {}", file.getOriginalFilename(), file.getNextRetryTime());
           continue;
         }
         // do the upload
+        log.info(
+            "Retrying file: {} retried times: {}",
+            file.getOriginalFilename(),
+            file.getDeliveryRetriedNum());
         Thread.sleep(3000);
 
         if (file.getSourceSystem().equalsIgnoreCase("ex")) {
@@ -59,7 +62,7 @@ public class ScheduledFileRetryService {
             file.getOriginalFilename(),
             file.getTargetConnectionName());
       } catch (Exception e) {
-        log.error("error while retrying file", e);
+        log.error("Error while retrying file", e);
         file.setDeliveredAt(null);
         file.setStatus(RETRYING);
         file.setDeliveryRetriedNum(file.getDeliveryRetriedNum() + 1);
