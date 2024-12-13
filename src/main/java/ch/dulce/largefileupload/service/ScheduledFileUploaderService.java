@@ -65,7 +65,7 @@ public class ScheduledFileUploaderService {
         file.setStatus(RETRYING);
         file.setDeliveryRetriedNum(0);
         file.setNextRetryTime(LocalDateTime.now().plusMinutes(initialRetryDelayMinutes));
-        file.setErrorMsg(e.getMessage());
+        file.setErrorMsg(e.getCause().getMessage());
       }
     }
   }

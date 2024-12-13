@@ -4,6 +4,8 @@ import static ch.dulce.largefileupload.service.FileService.*;
 
 import ch.dulce.largefileupload.repository.FileEntity;
 import ch.dulce.largefileupload.repository.FileRepository;
+import ch.dulce.largefileupload.service.sftp.SftpGateway;
+import java.io.File;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,11 @@ public class ScheduledFileRetryService {
   @Value("${app.fileRetryBatchSize}")
   private int fileRetryBatchSize;
 
+  @Value("${app.fileDir}")
+  private String fileDir;
+
   private final FileRepository fileRepository;
+  private final SftpGateway sftpGateway;
 
   @Scheduled(fixedRate = 20011, initialDelay = 21000)
   @Transactional
@@ -48,11 +54,11 @@ public class ScheduledFileRetryService {
             "Retrying file: {} retried times: {}",
             file.getOriginalFilename(),
             file.getDeliveryRetriedNum());
-        Thread.sleep(3000);
 
         if (file.getSourceSystem().equalsIgnoreCase("ex")) {
           throw new RuntimeException("test - could not retry file");
         }
+        sftpGateway.sendToSftp(new File(fileDir, file.getSavedFilename()));
 
         file.setDeliveredAt(LocalDateTime.now());
         file.setStatus(DELIVERED);
