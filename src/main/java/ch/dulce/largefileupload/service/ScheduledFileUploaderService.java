@@ -44,9 +44,7 @@ public class ScheduledFileUploaderService {
       try {
         log.info("Uploading file: {}", file.getOriginalFilename());
 
-        // do the upload
         sftpGateway.sendToSftp(new File(fileDir, file.getSavedFilename()));
-        // Thread.sleep(3000);
 
         if (file.getSourceSystem().equalsIgnoreCase("ex")) {
           throw new RuntimeException("test - could not save file");
