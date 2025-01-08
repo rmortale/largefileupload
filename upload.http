@@ -1,0 +1,18 @@
+### upload file
+POST http://localhost:8080/upload
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+sourceSystem: AVT
+sourceEnvironment: AAVT1
+targetConnectionName: VVZ
+
+--WebAppBoundary
+Content-Disposition: form-data; name="element-name"
+Content-Type: text/plain
+
+Name
+--WebAppBoundary
+Content-Disposition: form-data; name="data"; filename="data.json"
+Content-Type: application/xml
+
+< ./pom.xml
+--WebAppBoundary--
