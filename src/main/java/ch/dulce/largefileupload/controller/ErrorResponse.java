@@ -1,10 +1,11 @@
-package ch.dulce.largefileupload.exception;
+package ch.dulce.largefileupload.controller;
 
-import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.time.LocalDateTime;
 
 @Getter
 @Setter

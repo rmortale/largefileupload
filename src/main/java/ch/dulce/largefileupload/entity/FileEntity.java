@@ -1,11 +1,14 @@
-package ch.dulce.largefileupload.repository;
+package ch.dulce.largefileupload.entity;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Getter
@@ -14,6 +17,7 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class FileEntity {
 
   @Id @GeneratedValue private UUID id;
@@ -24,11 +28,6 @@ public class FileEntity {
   private String contentType;
   private String md5Checksum;
   private String targetConnectionName;
-  private String status;
-  private String errorMsg;
   private long sizeBytes;
-  private LocalDateTime receivedAt;
-  private LocalDateTime deliveredAt;
-  private LocalDateTime nextRetryTime;
-  private int deliveryRetriedNum;
+  @CreatedDate private LocalDateTime receivedAt;
 }

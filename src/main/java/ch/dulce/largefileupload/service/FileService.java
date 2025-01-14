@@ -1,64 +1,90 @@
 package ch.dulce.largefileupload.service;
 
-import ch.dulce.largefileupload.controller.FileDto;
-import ch.dulce.largefileupload.controller.FileResponse;
-import ch.dulce.largefileupload.repository.FileEntity;
+import ch.dulce.largefileupload.entity.FileEntity;
+import ch.dulce.largefileupload.entity.OutboxEntity;
+import ch.dulce.largefileupload.exception.BadRequestException;
 import ch.dulce.largefileupload.repository.FileRepository;
+import ch.dulce.largefileupload.repository.OutboxRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.fileupload2.core.FileItemInput;
+import org.apache.commons.fileupload2.core.FileItemInputIterator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.DigestUtils;
+import org.springframework.util.StringUtils;
 
 @Service
+@Slf4j
+@Transactional
+@RequiredArgsConstructor
 public class FileService {
 
-  public static final String RECEIVED = "received";
-  public static final String DELIVERED = "delivered";
-  public static final String RETRYING = "retrying";
-  public static final String NOT_DELIVERED = "notdelivered";
-
-  private final String fileDir;
   private final FileRepository fileRepository;
+  private final OutboxRepository outboxRepository;
+  private final ObjectMapper objectMapper;
 
-  public FileService(@Value("${app.fileDir}") String fileDir, FileRepository fileRepository) {
-    this.fileDir = fileDir;
-    this.fileRepository = fileRepository;
+  @Value("${app.fileDir}")
+  private String fileDir;
+
+  public List<UUID> uploadFiles(
+      FileItemInputIterator iter, String srcSystem, String srcEnv, String targetConnectionName)
+      throws IOException {
+    List<UUID> idList = new ArrayList<>();
+
+    iter.forEachRemaining(
+        item -> {
+          if (!item.isFormField()) {
+            if (!StringUtils.hasText(item.getName())) {
+              throw new BadRequestException("Original file name is required!");
+            }
+
+            FileEntity fileEntity =
+                saveAndAddFileRecord(item, srcSystem, srcEnv, targetConnectionName);
+            idList.add(fileEntity.getId());
+            OutboxEntity outboxEntity =
+                OutboxEntity.builder()
+                    .eventPayload(objectMapper.writeValueAsString(fileEntity))
+                    .build();
+            outboxRepository.save(outboxEntity);
+            log.info("Successfully saved file with id: {}.", fileEntity.getId());
+          }
+        });
+    return idList;
   }
 
-  public FileResponse saveAndAddFileRecord(FileDto dto) throws IOException {
+  private FileEntity saveAndAddFileRecord(
+      FileItemInput file, String srcSystem, String srcEnv, String targetConnectionName)
+      throws IOException {
     Path filePath = Path.of(fileDir, UUID.randomUUID().toString());
-    long copied =
-        Files.copy(
-            dto.getFileItem().getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+    long copied = Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
     FileEntity fileEntity =
         FileEntity.builder()
-            .sourceSystem(dto.getSrcSystem())
-            .sourceEnvironment(dto.getSrcEnv())
-            .targetConnectionName(dto.getTargetConnectionName())
+            .sourceSystem(srcSystem)
+            .sourceEnvironment(srcEnv)
+            .targetConnectionName(targetConnectionName)
             .savedFilename(filePath.getFileName().toString())
-            .contentType(dto.getFileItem().getContentType())
-            .originalFilename(dto.getFileItem().getName())
-            .deliveryRetriedNum(0)
+            .contentType(file.getContentType())
+            .originalFilename(file.getName())
             .md5Checksum(getMd5FromFile(filePath))
             .sizeBytes(copied)
-            .status(RECEIVED)
-            .receivedAt(LocalDateTime.now())
             .build();
 
-    FileEntity entity = fileRepository.save(fileEntity);
-
-    return FileResponse.builder()
-        .fileTracingId(entity.getId())
-        .sizeBytes(entity.getSizeBytes())
-        .originalFilename(entity.getOriginalFilename())
-        .build();
+    if (file.getName().contains("error")) {
+      throw new IOException("Error in file");
+    }
+    return fileRepository.save(fileEntity);
   }
 
   private String getMd5FromFile(Path filePath) throws IOException {

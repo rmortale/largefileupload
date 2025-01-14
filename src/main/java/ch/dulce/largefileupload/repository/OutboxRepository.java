@@ -1,7 +1,7 @@
 package ch.dulce.largefileupload.repository;
 
-import ch.dulce.largefileupload.entity.FileEntity;
+import ch.dulce.largefileupload.entity.OutboxEntity;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface FileRepository extends JpaRepository<FileEntity, UUID> {}
+public interface OutboxRepository extends JpaRepository<OutboxEntity, UUID> {}

@@ -11,7 +11,7 @@ Content-Type: text/plain
 
 Name
 --WebAppBoundary
-Content-Disposition: form-data; name="data"; filename="data.json"
+Content-Disposition: form-data; name="data"; filename="error.json"
 Content-Type: application/xml
 
 < ./pom.xml
